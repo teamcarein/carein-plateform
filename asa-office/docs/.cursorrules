@@ -1,0 +1,621 @@
+# CareIN Platform — AI Coding Assistant Rules
+
+> Ce fichier est lu par Cursor / Windsurf à chaque interaction. Il définit le contexte projet, les standards techniques, et les patterns obligatoires. **Tout code généré doit respecter ces règles sans exception.**
+
+---
+
+## 🎯 IDENTITÉ DU PROJET
+
+Tu travailles sur **CareIN Platform**, une plateforme médicale connectée multi-tenant déployée en marque blanche en Afrique. Les acteurs :
+
+- **CareIN** (l'éditeur) — édite et opère la plateforme. Invisible aux utilisateurs finaux.
+- **Brand Operator (BO)** — entreprise qui revend la plateforme sous sa marque (ex: ASA TECH en Côte d'Ivoire, MEDIKAS au Congo).
+- **Tenant** — client final du Brand Operator (hôpital, ONG, ministère, entreprise).
+- **End-users** — agents terrain, médecins, infirmiers, techniciens, responsables de service.
+
+Le code que tu écris sera exécuté en production pour des soins médicaux réels. La rigueur n'est pas négociable.
+
+---
+
+## 🏗️ ARCHITECTURE 3-NIVEAUX (NON NÉGOCIABLE)
+
+```
+CareIN (1, c'est nous)
+  └── Brand Operator (N, ex: ASA TECH)
+        └── Tenant (N par BO, ex: Hôpital Saint-Jean)
+              └── Users (Owner, Médecins, Agents, Techniciens)
+```
+
+**Règles d'isolation** :
+
+1. Un Brand Operator ne voit JAMAIS les données d'un autre BO. Validation par schéma PostgreSQL séparé (`bo_asatech`, `bo_medikas`).
+2. Un Tenant ne voit JAMAIS les données d'un autre Tenant. Filtrage automatique par `tenant_id` via global scope Eloquent.
+3. CareIN voit tout, mais via des endpoints dédiés (`/api/v1/carein/...`) avec audit obligatoire.
+4. Toute requête est résolue via 2 middlewares en cascade :
+   - `ResolveBrandOperator` : lit le `Host` header → `SET search_path TO bo_<code>`
+   - `ResolveTenant` : lit le user JWT → `tenant_id` dans `TenantContext`
+
+**Tu ne contournes JAMAIS ces middlewares**. Pas de `WHERE brand_operator_id = ?` en dur, pas de `connection('pgsql')->table('users')` qui saute le scope.
+
+---
+
+## 🛠️ STACK TECHNIQUE STRICTE
+
+### Backend (Laravel)
+
+- **Laravel 11** avec architecture DDD/CQRS
+- **PostgreSQL** avec un schéma par Brand Operator + `tenant_id` à l'intérieur
+- **Sanctum** pour l'authentification (tokens stockés en DB)
+- **Spatie Permission** pour les rôles métier
+- **Google2FA** pour la 2FA
+- **LiveKit** pour la téléconsultation audio/video
+- **Orthanc** comme serveur DICOM auto-hébergé
+- **zircote/swagger-php** pour les annotations OpenAPI sur les controllers
+
+**Structure obligatoire** :
+
+```
+app/
+├── Domain/
+│   └── <BoundedContext>/        ← Platform, Clinical, Teleconsultation, Campaign, Fleet
+│       └── <Aggregate>/
+│           ├── Entities/
+│           ├── ValueObjects/
+│           ├── Repositories/    ← interfaces uniquement
+│           ├── Services/
+│           └── Events/
+├── Application/
+│   └── <BoundedContext>/
+│       └── <Aggregate>/
+│           ├── Commands/
+│           │   └── <ActionName>/
+│           │       ├── <ActionName>Command.php
+│           │       └── <ActionName>Handler.php
+│           └── Queries/
+│               └── <QueryName>/
+├── Infrastructure/
+│   └── <BoundedContext>/
+│       └── <Aggregate>/
+│           └── Persistence/
+│               └── Eloquent<Aggregate>Repository.php
+├── Interface/
+│   └── Api/V1/
+│       ├── CareIn/              ← scope CareIN super-admin
+│       ├── BrandOperator/       ← scope BO admin
+│       ├── Tenant/              ← scope Tenant
+│       └── Public/              ← sans auth
+├── Models/                      ← Eloquent (Infrastructure layer en pratique)
+│   └── Concerns/
+│       ├── BelongsToTenant.php          ← global scope tenant_id
+│       └── BelongsToBrandOperator.php   ← global scope brand_operator_id
+└── Support/
+    ├── TenantContext.php
+    └── BrandOperatorContext.php
+```
+
+### Frontend (Next.js dans monorepo Turborepo)
+
+- **Next.js 14+** avec App Router (pas de Pages Router)
+- **TypeScript strict** (pas de `any`, jamais)
+- **Tailwind v4** avec preset partagé (`@carein/tailwind-preset`)
+- **TanStack Query (React Query)** pour la data layer client
+- **React Hook Form + Zod** pour les formulaires
+- **Server Actions** pour les mutations sensibles (auth, onboarding)
+- **date-fns + locale fr** pour les formatages
+- **lucide-react** pour les icônes
+- **recharts** pour les graphiques
+- **openapi-fetch** + types générés pour le client API
+
+### Mobile (Flutter, hors monorepo Next.js)
+
+- **Flutter** avec architecture feature-first
+- **Riverpod** pour la state management
+- **Drift** pour la base SQLite locale (offline-first)
+- **flutter_secure_storage** pour les credentials sensibles
+- **Sealed classes Result/Failure** pour la gestion d'erreurs (pas de fpdart)
+
+### Outils interdits
+
+- ❌ **Redux / MobX** — on utilise React Query + Context React
+- ❌ **Axios** — on utilise `openapi-fetch` qui wrap `fetch` natif
+- ❌ **Bootstrap / Material UI / Chakra** — on a notre `ui-kit` propre
+- ❌ **CSS-in-JS (styled-components, emotion)** — on utilise Tailwind + CSS variables
+- ❌ **Lodash complet** — utiliser `lodash-es` avec imports nommés ou natif JS
+
+---
+
+## 🚫 RÈGLES NON NÉGOCIABLES (CI BLOQUE)
+
+### 1. Aucune couleur hardcodée — JAMAIS
+
+```tsx
+// ❌ INTERDIT
+<div className="bg-[#00C896] text-white" />
+<div className="bg-blue-600" />
+<div style={{ color: '#E85050' }} />
+const COLOR = '#F5A623'
+
+// ✅ AUTORISÉ
+<div className="bg-primary text-primary-foreground" />
+<div className="bg-success" />
+<div className="text-danger" />
+```
+
+**Toutes les couleurs viennent du theming runtime via CSS variables**. Cf. ADR-0006.
+
+Couleurs sémantiques disponibles (depuis `@carein/tailwind-preset`) :
+- `primary` / `primary-foreground` / `primary-hover` — couleur de marque (variable selon BO)
+- `accent` / `accent-foreground` — couleur secondaire
+- `background` / `foreground` / `surface` — fond / texte / cartes
+- `muted` / `muted-foreground` — texte atténué
+- `border` / `input` — bordures
+- `success` / `success-foreground` — vert sémantique (pas la primaire !)
+- `warning` / `warning-foreground` — orange/jaune
+- `danger` / `danger-foreground` — rouge erreur
+- `sidebar` / `sidebar-foreground` / `sidebar-active` — sidebar (théme à part)
+
+### 2. Aucun `fetch()` direct dans les apps Next.js
+
+```tsx
+// ❌ INTERDIT
+const res = await fetch('/api/v1/patients')
+
+// ✅ AUTORISÉ
+import { apiClient } from '@carein/api-client'
+const { data } = await apiClient.get('/api/v1/tenant/patients', { query: { ... } })
+```
+
+Tout passe par `@carein/api-client` qui est typé depuis OpenAPI. Cf. ADR-0008.
+
+### 3. Aucun "ASA TECH" hardcodé
+
+```tsx
+// ❌ INTERDIT
+<title>ASA TECH — Backoffice</title>
+<h1>ASA TECH</h1>
+const PREFIX = 'ASA-'
+
+// ✅ AUTORISÉ
+import { useTheme } from '@carein/theme-engine'
+const theme = useTheme()
+<title>{theme.appName}</title>
+<h1>{theme.appName}</h1>
+```
+
+### 4. Imports via `index.ts`, jamais en profondeur
+
+```tsx
+// ❌ INTERDIT
+import { Button } from '@carein/ui-kit/src/components/button'
+import { useAuth } from '@carein/ui-kit/src/auth/use-auth'
+
+// ✅ AUTORISÉ
+import { Button, useAuth } from '@carein/ui-kit'
+```
+
+### 5. Aucune logique métier dans les frontends
+
+Les calculs cliniques (FINDRISC, SCORE2, WHO-ISH, BMI, etc.) vivent **côté backend Laravel** dans `Domain/Clinical/ClinicalEngine/Services/`. Le front affiche, ne calcule pas.
+
+Exception : règles purement présentationnelles (ex: "afficher en rouge si score > 75") qui peuvent être dans `@carein/domain-rules`.
+
+### 6. Tout `Patient`, `Encounter`, `Measurement` a un `tenant_id` non NULL
+
+Le trait `BelongsToTenant` injecte automatiquement `tenant_id` à la création. Tu ne fais JAMAIS de `Patient::create([...])` sans avoir `TenantContext` peuplé en amont.
+
+### 7. Annotations OpenAPI obligatoires sur tout nouveau controller
+
+```php
+#[OA\Get(
+    path: '/api/v1/tenant/patients',
+    summary: 'Liste des patients du Tenant courant',
+    security: [['sanctum' => []]],
+    tags: ['Tenant - Patients'],
+    parameters: [...],
+    responses: [...]
+)]
+public function index(Request $request): JsonResponse { ... }
+```
+
+Sans annotations, le PR est refusé en review.
+
+### 8. Mots de passe par défaut → `must_change_password=TRUE`
+
+Tout user créé avec un mot de passe par défaut a `must_change_password=TRUE`. Le middleware `EnforcePasswordChange` redirige vers `/password/change-required` avant toute autre action. Cf. ADR-0017.
+
+### 9. Tout en mode impersonation est audité
+
+Pendant une session d'impersonation (cf. ADR-0007), toutes les écritures portent `impersonation_id` dans les audit logs. Si l'audit log échoue, la transaction est rollback.
+
+### 10. Aucun secret en dur
+
+```tsx
+// ❌ INTERDIT
+const API_KEY = 'sk-abc123...'
+const JWT_SECRET = 'my-super-secret'
+
+// ✅ AUTORISÉ
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY
+// Pour les secrets serveur :
+const SECRET = process.env.JWT_SECRET // jamais préfixé NEXT_PUBLIC_
+```
+
+---
+
+## 📂 STRUCTURE FEATURE-FIRST OBLIGATOIRE
+
+Pour **toute nouvelle feature**, tu crées :
+
+```
+apps/<app>/src/features/<feature-name>/
+├── api.ts          ← fonctions CRUD (signatures stables)
+├── hooks.ts        ← React Query wrappers
+├── types.ts        ← Zod schemas + types TS
+├── mocks.ts        ← données mockées (mode dev hybride)
+└── actions.ts      ← (optionnel) Server Actions Next.js
+```
+
+Et :
+
+```
+apps/<app>/src/components/<feature-name>/
+├── <feature>-form.tsx
+├── <feature>-table.tsx
+└── <feature>-card.tsx
+```
+
+Et :
+
+```
+apps/<app>/src/app/(dashboard)/<feature-name>/
+├── page.tsx          ← liste
+├── new/page.tsx      ← création
+└── [id]/page.tsx     ← détail
+```
+
+**Exemple complet — feature "patients" dans Care Suite** :
+
+```
+apps/care-suite/src/
+├── features/patients/
+│   ├── api.ts          ← getPatients, getPatient, createPatient, updatePatient
+│   ├── hooks.ts        ← usePatients, usePatient, useCreatePatient
+│   ├── types.ts        ← patientSchema (Zod), PatientInput
+│   └── mocks.ts        ← MOCK_PATIENTS pour dev
+├── components/patients/
+│   ├── patient-form.tsx
+│   ├── patient-table.tsx
+│   └── patient-card.tsx
+└── app/(dashboard)/patients/
+    ├── page.tsx
+    ├── new/page.tsx
+    └── [id]/page.tsx
+```
+
+---
+
+## 🎨 UX/UI DESIGN — STANDARDS PRO MAX
+
+Quand tu crées une UI, tu suis ces principes **médicaux + accessibilité + marque blanche** :
+
+### Principes de design médical
+
+1. **Hiérarchie visuelle stricte** : info critique > info secondaire > metadata. Le médecin voit le risque CARDIO en premier, le numéro de patient en dernier.
+2. **Densité adaptée au contexte** :
+   - Care Suite (web) — densité moyenne, écran large, contexte calme
+   - Care Field (tablette) — densité élevée, écran moyen, terrain rapide
+3. **Pas de surcharge cognitive** : un écran = une tâche principale + max 2 actions secondaires
+4. **Codes couleurs sémantiques cohérents** :
+   - `success` (vert) — normal, terminé, validé
+   - `warning` (orange) — attention, modéré, à surveiller
+   - `danger` (rouge) — critique, anomalie, urgent
+   - `accent` (bleu) — informatif, neutre, en cours
+   - JAMAIS utiliser `primary` (couleur de marque) pour signifier un statut métier
+
+### Accessibilité (WCAG AA minimum, AAA pour les statuts)
+
+- **Contrast ratio** : minimum 4.5:1 pour le texte normal, 3:1 pour le grand texte, **7:1 pour les statuts critiques**
+- **Touch targets** : minimum 44×44px sur mobile/tablette, 24×24px sur web
+- **Focus visible** : tous les éléments interactifs ont un `:focus-visible` clair
+- **Labels obligatoires** : tout `<input>` a un `<label>` associé (RHF + `Input` du ui-kit le font automatiquement)
+- **Alt text** : toute image a un `alt`. Si décorative, `alt=""`.
+- **Lang** : `<html lang="fr">` (par défaut, surchargeable selon `tenant.language`)
+
+### États obligatoires de toute UI data-driven
+
+Pour **chaque** composant qui affiche des données distantes :
+
+1. ✅ **Loading state** — `<Skeleton>` ou indicateur visuel
+2. ✅ **Empty state** — message + CTA ("Aucun patient. Ajouter le premier.")
+3. ✅ **Error state** — message + bouton "Réessayer"
+4. ✅ **Success state** — l'affichage normal des données
+
+Si un seul de ces 4 états manque, le composant est **incomplet**.
+
+### Patterns CareIN spécifiques
+
+#### Tables (DataTable)
+- Header sticky en scroll vertical
+- Pagination en bas (composant `Pagination` du ui-kit)
+- Filters au-dessus du tableau, alignés à gauche
+- Actions au-dessus à droite ("Nouveau patient", "Exporter")
+- Click sur ligne → navigation vers le détail
+- Empty state : message + CTA
+
+#### Forms (RHF + Zod)
+- Labels au-dessus du champ, jamais à gauche
+- Errors inline sous le champ
+- Champs requis sans astérisque (le label suffit), champs optionnels marqués "(optionnel)"
+- Boutons : Submit à gauche (primary), Annuler à droite (ghost)
+- Pas de placeholder qui remplace le label
+- Loading state du Submit pendant la mutation
+
+#### Cards (Card du ui-kit)
+- Header (CardHeader avec CardTitle + actions optionnelles)
+- Content
+- Footer optionnel
+- Pas de "card dans card" (1 niveau max)
+
+#### Empty states (très important)
+**Mauvais** : "Aucune donnée"
+**Bon** : "Pas encore de patients dans ce service. [Ajouter le premier patient]"
+
+L'empty state doit toujours **proposer une action** quand c'est possible.
+
+#### Modales et confirmations
+- Modale uniquement pour les actions destructives ou les workflows complexes
+- Pour les confirmations simples : utiliser `<AlertDialog>` (à venir) avec titre clair, description, bouton primaire (action) + bouton secondaire (Annuler)
+- ESC ferme toujours la modale, sauf si une action critique est en cours
+
+#### Composants spécifiques métier
+
+##### `RiskGauge` (FINDRISC, SCORE2, WHO-ISH)
+- Toujours afficher le score numérique au centre
+- Toujours afficher le label coloré en dessous (Faible / Modéré / Élevé / Critique)
+- Couleurs sémantiques : success / warning / warning / danger
+- Tailles : sm (28px), md (40px), lg (56px) — utiliser md par défaut
+
+##### `MetricCard`
+- Toujours : titre en CAPS gris + valeur grosse (font-mono pour les chiffres) + sous-titre optionnel
+- Icon optionnelle dans un bg coloré sémantique
+- Trend optionnel avec ↑ vert ou ↓ rouge
+
+##### `Badge`
+- Pour les statuts métier (active, completed, anomaly, critical, in_progress, pending)
+- JAMAIS utiliser un Badge pour autre chose (pas pour des labels libres)
+- Toujours avec une variant sémantique (pas de Badge avec couleur libre)
+
+### Adaptation marque blanche
+
+**Le design doit fonctionner avec n'importe quel jeu de couleurs primaire/accent.**
+
+Tester ton UI avec au moins 2 thèmes distincts mentalement :
+- Vert ASA TECH (`#00C896` / `#1A6FD4`)
+- Orange MEDIKAS (`#C75B12` / `#1B2A4E`)
+
+Si ton design s'effondre quand on change `--color-primary`, c'est qu'il y a un hardcoding caché.
+
+**Patterns à éviter** :
+- "Le fond du panel = la couleur primaire" → si la primaire est foncée, ça marche, si elle est claire, le texte blanc devient illisible
+- "L'icône a la couleur primaire" — OK, mais le contenant doit être `bg-primary/10` ou `bg-surface`, pas `bg-primary` plein
+- Les illustrations brandées → utiliser des illustrations médicales génériques
+
+### Typographie
+
+Du `@carein/tailwind-preset` :
+- `font-display` — Plus Jakarta Sans, pour les titres et CTAs
+- `font-sans` — Plus Jakarta Sans, pour le corps
+- `font-mono` — JetBrains Mono, pour les chiffres, codes patient, mesures
+
+**Règle d'or** : tout chiffre médical (BMI, tension, glycémie, score risque) en `font-mono`. Tout code (patient_code, device_serial) en `font-mono`.
+
+### Espacement (Tailwind scale)
+
+- `p-2` (8px) — espacement très serré (badges, micro-actions)
+- `p-3` (12px) — padding cellules de tableau
+- `p-4` (16px) — padding cards standard
+- `p-6` (24px) — padding pages, espacement entre sections
+- `gap-3` ou `gap-4` — grilles
+- `space-y-6` — sections de page
+
+---
+
+## 🔐 SÉCURITÉ — RÉFLEXES OBLIGATOIRES
+
+1. **Tokens en cookies httpOnly + Secure + SameSite=Lax**, jamais en localStorage
+2. **Server Actions** pour toute mutation sensible (login, change-password, onboarding)
+3. **CSRF protection** activée pour les Server Actions Next.js (par défaut)
+4. **HTTPS obligatoire** en production (TLS 1.3)
+5. **Validation Zod** côté front + validation Laravel côté back (jamais une seule des deux)
+6. **Pas de log de données sensibles** : pas de `console.log(user.password)`, pas de `Log::info('PIN: ' . $pin)`
+7. **PII dans les URLs** : éviter `/users/email/john@example.com`, préférer `/users/{uuid}`
+8. **Rate limiting** sur tous les endpoints publics (`/auth/login`, `/auth/forgot-password`, `/onboarding/start`)
+
+---
+
+## 🧪 TESTS — STANDARDS
+
+### Backend (PHPUnit + Pest)
+- Tests d'isolation cross-BO **obligatoires et bloquants en CI** : un user `bo_asatech` ne peut JAMAIS lire `bo_medikas.*`
+- Tests d'isolation cross-Tenant : un user `tenant_a` ne voit pas les données de `tenant_b`
+- Tests de transition de statut : `TenantStatus::PENDING->canTransitionTo(ACTIVE)` renvoie `true`
+- Tests de Handlers (Application layer) avec mocks de Repositories
+
+### Frontend (Vitest + Testing Library)
+- Tests des hooks React Query (avec MSW pour les mocks)
+- Tests des composants ui-kit (rendering + interactions)
+- Tests d'intégration sur les pages critiques (login, onboarding)
+- Pas de test E2E pour le moment (à ajouter en sprint dédié)
+
+### Convention de nommage
+- `*.test.ts(x)` à côté des fichiers testés
+- Pas de dossier `__tests__/` séparé
+- Un fichier source = un fichier de test (max)
+
+---
+
+## 📝 CONVENTIONS DE CODE
+
+### TypeScript
+
+- **Strict mode** activé (`strict: true` dans `tsconfig.json`)
+- **Pas de `any`** — utiliser `unknown` si type vraiment inconnu, puis narrowing
+- **Pas de `as Type`** sauf cas justifié (commenter pourquoi)
+- **Pas de `// @ts-ignore`** — utiliser `// @ts-expect-error` avec description
+- **Types vs interfaces** : `type` par défaut, `interface` pour les contrats étendables (rare)
+- **Utility types** privilégiés : `Partial<T>`, `Omit<T, K>`, `Pick<T, K>`
+
+### Imports
+
+```typescript
+// 1. Imports React/Next
+import { useState } from 'react'
+import Link from 'next/link'
+
+// 2. Imports de packages externes
+import { useQuery } from '@tanstack/react-query'
+import { z } from 'zod'
+
+// 3. Imports de packages internes (@carein/*)
+import { Button, Card } from '@carein/ui-kit'
+import { useTheme } from '@carein/theme-engine'
+import { apiClient } from '@carein/api-client'
+
+// 4. Imports relatifs au projet courant (avec alias @)
+import { usePatients } from '@/features/patients/hooks'
+import { formatDate } from '@/lib/formatters'
+
+// 5. Imports relatifs (./ ou ../)
+import { PatientCard } from './patient-card'
+```
+
+### Naming
+
+- **Composants** : `PascalCase` — `PatientForm`, `RiskGauge`
+- **Hooks** : `useCamelCase` — `usePatients`, `useTheme`
+- **Fonctions** : `camelCase` — `formatDate`, `calculateBmi`
+- **Constants** : `SCREAMING_SNAKE_CASE` — `MAX_PATIENTS_PER_PAGE`
+- **Types** : `PascalCase` — `Patient`, `EncounterStatus`
+- **Fichiers** : `kebab-case.tsx` — `patient-form.tsx`, `use-patients.ts`
+- **Dossiers** : `kebab-case` — `device-bindings/`
+
+### Php (Laravel)
+
+- **Classes** : `PascalCase`, namespacés selon DDD
+- **Methods** : `camelCase`
+- **Constants** : `SCREAMING_SNAKE_CASE`
+- **Fichiers** : `PascalCase.php`
+- **Strict types** : `declare(strict_types=1);` au top de chaque fichier
+- **Constructor property promotion** : `public function __construct(private readonly ...) {}`
+- **Final classes** par défaut, sauf si héritage prévu
+- **Enums** typed (BackedEnum) : `enum Status: string { case ACTIVE = 'active'; }`
+
+---
+
+## 🎯 WORKFLOW PAR TÂCHE
+
+Si l'utilisateur te demande "fais T04" ou "exécute la tâche T08", consulte la **bibliothèque de tâches** dans `docs/prompts/tasks/`. Chaque fichier `T<NN>-<nom>.md` contient :
+
+- Objectif de la tâche
+- Pré-requis (dépendances)
+- Livrables exhaustifs
+- Definition of Done
+- Pièges à éviter
+
+**Tu ne génères jamais de code sans avoir lu la spec de la tâche** si elle existe.
+
+---
+
+## 🎭 ADAPTATION AU CONTEXTE
+
+### Si l'utilisateur te demande une feature Sprint A
+
+1. Vérifie si elle est dans la roadmap (ADR ou docs/coordination)
+2. Si oui : suis le contrat d'interface défini
+3. Si non : alerte l'utilisateur que ce n'est pas dans le scope, propose de créer un nouvel ADR
+
+### Si l'utilisateur te demande de faire quelque chose qui contredit un ADR
+
+**Tu refuses et tu expliques** :
+
+> "Cette demande contredit l'ADR-0006 (theming runtime cascade). L'ADR interdit les couleurs hardcodées car ça casse la marque blanche pour les futurs Brand Operators. Je peux à la place :
+> - Option A : utiliser une variable CSS sémantique existante (`bg-primary`)
+> - Option B : ajouter une nouvelle CSS variable au preset si une couleur sémantique manque
+> - Option C : ouvrir une discussion pour amender l'ADR"
+
+### Si l'utilisateur veut "juste un truc rapide"
+
+Tu rappelles que ce code finira en production médicale. Tu proposes le bon pattern même si c'est 10 minutes de plus.
+
+### Si tu hésites sur un choix architectural
+
+Tu poses la question avant d'écrire du code. Mieux vaut 5 minutes de discussion que 2 heures de refactor.
+
+---
+
+## 🚦 FORMAT DE LIVRAISON
+
+### Quand tu écris du code
+
+- **Fichiers complets** — jamais de "...rest of the code" ou de "// reste inchangé"
+- **Imports en haut, exports en bas**
+- **Commentaires utiles uniquement** — pas de commentaire qui paraphrase le code (`// On crée un patient` au-dessus de `const patient = ...`)
+- **TODO seulement si vraiment justifié**, avec issue référencée : `// TODO(#142): handle network errors`
+
+### Quand tu crées une nouvelle feature
+
+Tu livres **systématiquement** dans cet ordre :
+
+1. **Migration DB** (si applicable) — Laravel
+2. **Domain layer** (Entities, VO, Repository interface, Events) — Laravel
+3. **Application layer** (Commands, Queries, Handlers) — Laravel
+4. **Infrastructure layer** (Eloquent Repository) — Laravel
+5. **Interface layer** (Controller + OpenAPI annotations + Resource) — Laravel
+6. **Tests d'isolation** — Laravel
+7. **Types Zod + TS** — Front
+8. **API client functions** (`features/<f>/api.ts`) — Front
+9. **React Query hooks** (`features/<f>/hooks.ts`) — Front
+10. **Composants UI** — Front
+11. **Pages Next.js** — Front
+
+Si tu ne fais qu'une partie, tu **listes ce qui reste à faire**.
+
+### Quand tu fais une review
+
+Tu utilises une **checklist par ADR concerné** :
+
+```
+- [ ] ADR-0006 : aucune couleur hardcodée ?
+- [ ] ADR-0008 : annotations OpenAPI complètes ?
+- [ ] ADR-0017 : scope + business_roles correctement vérifiés ?
+- [ ] Tests d'isolation présents et bloquants ?
+- [ ] Types Zod côté front + validation Laravel côté back ?
+```
+
+---
+
+## 📚 DOCUMENTS DE RÉFÉRENCE
+
+Si tu as besoin de plus de contexte, consulte (par ordre de priorité) :
+
+1. `docs/adr/` — les 12 ADR validés (architecture)
+2. `docs/coordination/` — sprints + migration backend existant
+3. `docs/roadmap/` — Option C (refactor + monorepo)
+4. `docs/prompts/tasks/` — bibliothèque de tâches T01-T12 réutilisables
+5. `docs/api/openapi.yaml` — contrat API source de vérité
+
+---
+
+## ⚠️ EN CAS DE DOUTE
+
+- Tu poses une question avant d'écrire du code spéculatif
+- Tu cites l'ADR concerné quand tu prends une décision
+- Tu rappelles les règles non négociables si l'utilisateur veut les contourner
+- Tu refuses poliment de générer du code dangereux (secrets en dur, requêtes SQL non paramétrées, etc.)
+- **Tu n'inventes JAMAIS** : si une fonction `useFooBar` n'existe pas, tu le dis. Pas de hallucination.
+
+---
+
+**Dernière mise à jour** : 2026-04-28 — Version 1.0
+**Maintenu par** : Rich (CTO) + équipe technique
+**Avant modification** : créer une PR de revue, validée par 1 dev senior

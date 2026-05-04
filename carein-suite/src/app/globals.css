@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Brand CareIN ─────────────────────────────────────────────── */
+  --color-primary:            #1A4A8C;
+  --color-primary-hover:      #163E75;
+  --color-primary-foreground: #ffffff;
+
+  /* ── Sémantique ──────────────────────────────────────────────── */
+  --color-success:            #10B981;
+  --color-success-foreground: #ffffff;
+  --color-secondary:          #0A7E5C;
+  --color-secondary-foreground: #ffffff;
+  --color-warning:            #F59E0B;
+  --color-warning-foreground: #ffffff;
+  --color-danger:             #EF4444;
+  --color-danger-foreground:  #ffffff;
+  --color-extra:              #8B5CF6;
+  --color-extra-foreground:   #ffffff;
+
+  /* ── Surface ─────────────────────────────────────────────────── */
+  --color-surface:            var(--surface);
+  --color-border:             var(--border);
+  --color-muted:              var(--muted);
+  --color-muted-foreground:   var(--muted-fg);
+
+  /* ── Sidebar ─────────────────────────────────────────────────── */
+  --color-sidebar:            #0f1923;
+  --color-sidebar-active:     #1f2937;
+
+  --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+
+  --radius-card: 8px;
+  --radius-btn:  6px;
+}
+
+:root {
+  --background: #f4f6f8;
+  --foreground: #0f1923;
+  --surface:    #ffffff;
+  --border:     rgba(0, 0, 0, 0.08);
+  --muted:      #f0f2f5;
+  --muted-fg:   #6b7280;
+}
+
+.dark {
+  --background: #0a1018;
+  --foreground: #e8edf2;
+  --surface:    #0f1923;
+  --border:     rgba(255, 255, 255, 0.08);
+  --muted:      #1a2333;
+  --muted-fg:   #9ca3af;
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Scrollbar slim */
+::-webkit-scrollbar       { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(26, 74, 140, 0.25);
+  border-radius: 2px;
+}

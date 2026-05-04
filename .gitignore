@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+dist/
+
+# Turbo cache
+.turbo/
+
+# Environment variables (contain secrets)
+.env
+.env.local
+.env.*.local
+
+# Misc
+*.log
+.DS_Store
+Thumbs.db

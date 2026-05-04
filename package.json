@@ -1,0 +1,29 @@
+{
+  "name": "carein-platform",
+  "private": true,
+  "version": "0.0.1",
+  "description": "CareIN Platform — Multi-tenant medical platform",
+  "packageManager": "npm@11.6.1",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "workspaces": [
+    "asa-office",
+    "carein-suite",
+    "packages/*",
+    "tools/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "tailwindcss": "^4",
+    "turbo": "^2.0.0",
+    "typescript": "^5.5.0"
+  }
+}

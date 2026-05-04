@@ -1,0 +1,94 @@
+@import "tailwindcss";
+@source "../../node_modules/@carein/ui-kit/src/**/*.{ts,tsx}";
+
+@theme {
+  /* ── Brand ────────────────────────────────────────────────────── */
+  --color-primary:            #00C896;
+  --color-primary-hover:      #00a87e;
+  --color-primary-foreground: #ffffff;
+
+  /* ── Semantic (statut, jamais couleur de marque) ─────────────── */
+  --color-success:            #00C896;
+  --color-success-foreground: #ffffff;
+  --color-secondary:          #1A6FD4;
+  --color-secondary-foreground: #ffffff;
+  --color-warning:            #F5A623;
+  --color-warning-foreground: #ffffff;
+  --color-danger:             #E85050;
+  --color-danger-foreground:  #ffffff;
+  --color-extra:              #8B5CF6;
+  --color-extra-foreground:   #ffffff;
+
+  /* ── Surface — référence les CSS vars light/dark ─────────────── */
+  --color-surface:            var(--surface);
+  --color-border:             var(--border);
+
+  /* ── Sidebar ─────────────────────────────────────────────────── */
+  --color-sidebar:            #0f1923;
+  --color-sidebar-active:     #1a2a3a;
+
+  --font-sans: var(--font-jakarta);
+  --font-mono: var(--font-jetbrains);
+
+  --radius-card: 12px;
+  --radius-btn: 8px;
+}
+
+:root {
+  --background: #f5f7fa;
+  --foreground: #0f1923;
+  --surface: #ffffff;
+  --border: rgba(0, 0, 0, 0.08);
+}
+
+.dark {
+  --background: #0a1018;
+  --foreground: #e8edf2;
+  --surface: #0f1923;
+  --border: rgba(255, 255, 255, 0.08);
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Medical icon float animations */
+@keyframes float-a {
+  0%, 100% { transform: translateY(0px) rotate(0deg);   opacity: 0.45; }
+  50%       { transform: translateY(-14px) rotate(3deg); opacity: 0.80; }
+}
+@keyframes float-b {
+  0%, 100% { transform: translateY(0px) rotate(0deg);    opacity: 0.50; }
+  50%       { transform: translateY(12px) rotate(-3deg); opacity: 0.75; }
+}
+@keyframes float-c {
+  0%, 100% { transform: translateY(0px) scale(1);     opacity: 0.40; }
+  50%       { transform: translateY(-10px) scale(1.06); opacity: 0.78; }
+}
+@keyframes float-d {
+  0%, 100% { transform: translateY(0px) rotate(45deg);      opacity: 0.45; }
+  50%       { transform: translateY(11px) rotate(51deg);     opacity: 0.72; }
+}
+@keyframes pulse-ring {
+  0%, 100% { transform: scale(1);    opacity: 0.15; }
+  50%       { transform: scale(1.12); opacity: 0.30; }
+}
+
+/* Scrollbar slim */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 200, 150, 0.3);
+  border-radius: 2px;
+}
