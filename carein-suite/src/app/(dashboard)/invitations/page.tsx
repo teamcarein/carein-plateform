@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { getInvitations } from '@/features/invitations/api'
 import { getBrandOperators } from '@/features/brand-operators/api'
 import { InvitationsTable } from './invitations-table'
@@ -22,7 +23,9 @@ export default async function InvitationsPage({
 
   return (
     <div>
-      <InvitationFilters tenants={tenants} />
+      <Suspense>
+        <InvitationFilters tenants={tenants} />
+      </Suspense>
       <InvitationsTable data={data} />
     </div>
   )

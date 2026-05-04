@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { getDeviceCatalog } from '@/features/device-catalog/api'
 import { DeviceCatalogTable } from './device-catalog-table'
 
@@ -19,5 +20,9 @@ export default async function DeviceCatalogPage({
   const data = result?.data ?? []
   const meta = result?.meta ?? { current_page: 1, last_page: 1, per_page: 30, total: 0 }
 
-  return <DeviceCatalogTable data={data} meta={meta} />
+  return (
+    <Suspense>
+      <DeviceCatalogTable data={data} meta={meta} />
+    </Suspense>
+  )
 }

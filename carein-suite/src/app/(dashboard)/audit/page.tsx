@@ -1,4 +1,5 @@
-﻿import { ScrollText } from 'lucide-react'
+﻿import { Suspense } from 'react'
+import { ScrollText } from 'lucide-react'
 import { Card } from '@carein/ui-kit'
 import { Badge } from '@carein/ui-kit'
 import { getAuditLogs } from '@/features/audit/api'
@@ -33,7 +34,9 @@ export default async function AuditPage({
           <h1 className="text-xl font-bold">Audit Logs</h1>
           <p className="text-sm text-foreground/50 mt-0.5">Traçabilité des actions cross-BO</p>
         </div>
-        <AuditFilters tenants={tenants} currentPage={page} lastPage={lastPage} />
+        <Suspense>
+          <AuditFilters tenants={tenants} currentPage={page} lastPage={lastPage} />
+        </Suspense>
       </div>
 
       <Card className="p-0 overflow-hidden">
